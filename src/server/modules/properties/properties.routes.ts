@@ -6,6 +6,7 @@ import { subscriptionEnforcementMiddleware } from "../../middleware/subscription
 import { storageService } from "../../storage/storage.service.js";
 import {
   QuickAddPropertySchema,
+  PropertyStatusSchema,
   UpdatePropertySchema,
   LinkPropertyOwnerSchema,
   AssignRecordSchema
@@ -35,6 +36,7 @@ propertiesRouter.get("/", async (req, res, next) => {
         page,
         limit,
         status: statusParam,
+        property_status: req.query.property_status as string,
         visibility: req.query.visibility as string,
         branch_id: branchId,
         search: req.query.search as string,
@@ -46,7 +48,7 @@ propertiesRouter.get("/", async (req, res, next) => {
         max_price: req.query.max_price ? Number(req.query.max_price) : undefined,
         min_area: req.query.min_area ? Number(req.query.min_area) : undefined,
         max_area: req.query.max_area ? Number(req.query.max_area) : undefined,
-        bedrooms: req.query.bedrooms ? Number(req.query.bedrooms) : undefined,
+        bedrooms: req.query.bedrooms && req.query.bedrooms !== "ALL" ? Number(req.query.bedrooms) : undefined,
         has_parking: req.query.has_parking === "true",
         has_elevator: req.query.has_elevator === "true",
         has_storage: req.query.has_storage === "true",
@@ -202,7 +204,7 @@ propertiesRouter.patch("/:id/assign", async (req, res, next) => {
 
 propertiesRouter.patch("/:id/status", async (req, res, next) => {
   try {
-    const { status } = req.body;
+    const status = PropertyStatusSchema.parse(req.body.status);
     if (!status) {
       return res.status(400).json({
         success: false,

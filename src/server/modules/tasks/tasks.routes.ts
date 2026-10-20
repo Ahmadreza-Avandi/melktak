@@ -5,6 +5,8 @@ import { authMiddleware } from "../../middleware/auth.middleware.js";
 import { subscriptionEnforcementMiddleware } from "../../middleware/subscription.middleware.js";
 import { QuickAddTaskSchema } from "../../../shared/validation.js";
 
+import { taskSchedule } from "../../../shared/task-schedule.js";
+
 const tasksRouter = Router();
 
 tasksRouter.use(authMiddleware);
@@ -51,11 +53,7 @@ tasksRouter.get("/today", async (req, res, next) => {
     }
 
     const allTasks = await postgresDb.getTasks(tenantId, { userId, branch_id: branchId });
-    const now = new Date();
-    const todayTasks = allTasks.filter(t => {
-      if (t.status === "COMPLETED" || t.status === "CANCELLED") return false;
-      return new Date(t.due_at) >= now;
-    });
+    const { todayTasks } = taskSchedule(allTasks, new Date(), req.tenant.timezone || "Asia/Tehran");
     return res.json({ success: true, data: todayTasks });
   } catch (error) {
     next(error);
@@ -79,8 +77,7 @@ tasksRouter.get("/overdue", async (req, res, next) => {
     }
 
     const allTasks = await postgresDb.getTasks(tenantId, { userId, branch_id: branchId });
-    const now = new Date();
-    const overdueTasks = allTasks.filter(t => t.status === "OVERDUE" || (t.status === "TODO" && new Date(t.due_at) < now));
+    const { overdueTasks } = taskSchedule(allTasks, new Date(), req.tenant.timezone || "Asia/Tehran");
     return res.json({ success: true, data: overdueTasks });
   } catch (error) {
     next(error);

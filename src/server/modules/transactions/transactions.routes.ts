@@ -181,6 +181,29 @@ transactionsRouter.patch("/:id", async (req, res, next) => {
     }
 
     const validated = UpdateTransactionSchema.parse(req.body);
+    // Validate the complete resulting contract, including amounts when changing its type.
+    CreateTransactionSchema.parse({ ...existing, contract_date: new Date(existing.contract_date).toISOString(), ...validated });
+    const propertyId = validated.property_id || existing.property_id;
+    const property = await postgresDb.getPropertyById(tenantId, propertyId, req.user);
+    if (!property || (req.user.role_code === "BRANCH_MANAGER" && property.branch_id !== req.user.branch_id)) {
+      return res.status(404).json({ success: false, error: { code: "PROPERTY_NOT_FOUND", message: "ملک انتخابی یافت نشد یا دسترسی مجاز نیست." } });
+    }
+    if (validated.customer_id && !await postgresDb.getCustomerById(tenantId, validated.customer_id, req.user)) {
+      return res.status(404).json({ success: false, error: { code: "CUSTOMER_NOT_FOUND", message: "متقاضی انتخابی یافت نشد یا دسترسی مجاز نیست." } });
+    }
+    if (validated.owner_id && !await postgresDb.getOwnerById(tenantId, validated.owner_id)) {
+      return res.status(404).json({ success: false, error: { code: "OWNER_NOT_FOUND", message: "مالک انتخابی یافت نشد." } });
+    }
+    if (validated.agent_id !== undefined) {
+      const agent = validated.agent_id && await postgresDb.getUserById(validated.agent_id);
+      const isManager = ["ADMIN", "OWNER", "BRANCH_MANAGER"].includes(req.user.role_code);
+      if (!agent || agent.tenant_id !== tenantId || !agent.is_active ||
+          (!isManager && agent.id !== req.user.id) ||
+          (req.user.role_code === "BRANCH_MANAGER" && agent.branch_id !== req.user.branch_id)) {
+        return res.status(403).json({ success: false, error: { code: "INVALID_AGENT", message: "مشاور انتخابی مجاز یا فعال نیست." } });
+      }
+    }
+    validated.branch_id = property.branch_id || existing.branch_id;
     const updated = await postgresDb.updateTransaction(tenantId, userId, req.params.id, validated);
     if (!updated) {
       return res.status(404).json({
@@ -193,6 +216,20 @@ transactionsRouter.patch("/:id", async (req, res, next) => {
       data: updated,
       message: "اطلاعات معامله با موفقیت بروزرسانی شد."
     });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Deletion follows the same tenant, branch and agent access rules as editing.
+transactionsRouter.delete("/:id", async (req, res, next) => {
+  try {
+    const existing = await postgresDb.getTransactionById(req.tenant.id, req.params.id, req.user);
+    if (!existing) {
+      return res.status(404).json({ success: false, error: { code: "NOT_FOUND", message: "معامله مورد نظر یافت نشد." } });
+    }
+    await postgresDb.deleteTransaction(req.tenant.id, req.user.id, req.params.id);
+    return res.json({ success: true, message: "معامله با موفقیت حذف شد." });
   } catch (error) {
     next(error);
   }

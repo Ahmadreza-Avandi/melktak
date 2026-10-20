@@ -1,14 +1,17 @@
-if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.getRegistrations().then((registrations) => {
-    for (const registration of registrations) {
-      registration.unregister();
-    }
-  });
-}
-if ('caches' in window) {
-  caches.keys().then((names) => {
-    for (const name of names) {
-      caches.delete(name);
-    }
+// Capture before the user opens More, including prompts fired during login.
+window.addEventListener('beforeinstallprompt', (event) => {
+  event.preventDefault();
+  window.melktakInstallPrompt = event;
+  window.dispatchEvent(new Event('melktak:installprompt'));
+});
+window.addEventListener('appinstalled', () => {
+  window.melktakInstallPrompt = null;
+  window.melktakAppInstalled = true;
+  window.dispatchEvent(new Event('melktak:installprompt'));
+});
+if ('serviceWorker' in navigator && window.isSecureContext) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js', { scope: '/', updateViaCache: 'none' })
+      .catch(error => console.error('Service Worker registration failed:', error));
   });
 }

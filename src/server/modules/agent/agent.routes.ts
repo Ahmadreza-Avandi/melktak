@@ -4,6 +4,8 @@ import { postgresDb } from "../../db/postgres.js";
 import { authMiddleware } from "../../middleware/auth.middleware.js";
 import { subscriptionEnforcementMiddleware } from "../../middleware/subscription.middleware.js";
 
+import { taskSchedule } from "../../../shared/task-schedule.js";
+
 const agentRouter = Router();
 
 agentRouter.use(authMiddleware);
@@ -12,7 +14,7 @@ agentRouter.use(subscriptionEnforcementMiddleware);
 agentRouter.get("/home", async (req, res, next) => {
   try {
     const tenantId = req.tenant.id;
-    const userId = req.user.id;
+    const userId = req.user.role_code === "AGENT" ? req.user.id : undefined;
     let branchId = (req.query.branch_id as string) || (req.query.branchId as string) || undefined;
 
     // Enforce branch boundary: non-admins cannot override to another branch
@@ -30,13 +32,12 @@ agentRouter.get("/home", async (req, res, next) => {
       postgresDb.getRecentActivities(tenantId, 6)
     ]);
 
-    const now = new Date();
-    const overdueTasks = allTasks.filter(t => t.status === "OVERDUE" || (t.status === "TODO" && new Date(t.due_at) < now));
-    const todayTasks = allTasks.filter(t => {
-      if (t.status === "COMPLETED" || t.status === "CANCELLED") return false;
-      const dueDate = new Date(t.due_at);
-      return dueDate >= now;
-    });
+    const { overdueTasks, todayTasks, upcomingVisits: visits } = taskSchedule(
+      allTasks, new Date(), req.tenant.timezone || "Asia/Tehran"
+    );
+    const upcomingVisits = visits.map(task => ({
+      ...task, scheduled_at: task.due_at, notes: task.description
+    }));
 
     const homeData = {
       agent: {
@@ -49,7 +50,7 @@ agentRouter.get("/home", async (req, res, next) => {
       metrics: {
         overdue_count: overdueTasks.length,
         today_count: todayTasks.length,
-        upcoming_visits_count: 0,
+        upcoming_visits_count: upcomingVisits.length,
         smart_matches_count: smartMatches.length,
         active_customers_count: customers.length,
         active_properties_count: properties.length
@@ -57,13 +58,13 @@ agentRouter.get("/home", async (req, res, next) => {
       summary: {
         overdueTasks: overdueTasks.length,
         todayTasks: todayTasks.length,
-        upcomingVisits: 0,
+        upcomingVisits: upcomingVisits.length,
         activeCustomers: customers.length,
         activeProperties: properties.length
       },
       overdueTasks,
       todayTasks,
-      upcomingVisits: [],
+      upcomingVisits,
       smartMatches,
       recentActivities
     };

@@ -70,8 +70,13 @@ export const QuickAddPropertySchema = z.object({
   owner_phone: z.string().optional()
 });
 
+export const PropertyStatusSchema = z.enum([
+  "ACTIVE", "AVAILABLE", "NEGOTIATION", "UNDER_NEGOTIATION", "RESERVED",
+  "DEAL", "TRANSACTED", "SOLD", "RENTED", "ARCHIVED"
+]);
+
 export const UpdatePropertySchema = QuickAddPropertySchema.partial().extend({
-  status: z.enum(["ACTIVE", "RESERVED", "TRANSACTED", "ARCHIVED"]).optional(),
+  status: PropertyStatusSchema.optional(),
   assigned_to_user_id: z.string().uuid().optional()
 });
 
@@ -232,7 +237,7 @@ export const CreateTransactionSchema = z.object({
   final_price: z.coerce.number().nonnegative().optional().nullable(),
   deposit_amount: z.coerce.number().nonnegative().optional().nullable(),
   rent_amount: z.coerce.number().nonnegative().optional().nullable(),
-  contract_date: z.string().min(1, "تاریخ معامله الزامی است"),
+  contract_date: z.string().datetime({ offset: true, message: "تاریخ معامله معتبر نیست" }),
   agent_id: z.string().uuid().optional().nullable().or(z.literal("")),
   branch_id: z.string().uuid().optional().nullable().or(z.literal("")),
   notes: z.string().optional().nullable().or(z.literal("")),
@@ -249,6 +254,7 @@ export const CreateTransactionSchema = z.object({
 });
 
 export const UpdateTransactionSchema = z.object({
+  property_id: z.string().uuid().optional(),
   transaction_type: z.enum(["SALE", "RENT", "PRE_SALE", "EXCHANGE"]).optional(),
   customer_id: z.string().optional().nullable().or(z.literal("")),
   customer_name: z.string().trim().min(2).optional(),
