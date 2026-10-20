@@ -20,8 +20,8 @@ customersRouter.get("/", async (req, res, next) => {
   try {
     const tenantId = req.tenant.id;
     const page = Math.max(1, parseInt(String(req.query.page || "1"), 10) || 1);
-    const limit = Math.min(100, Math.max(1, parseInt(String(req.query.limit || "10"), 10) || 10));
-    const statusParam = req.query.status || (req.query.include_archived === "true" ? "archived" : "active");
+    const limit = Math.min(500, Math.max(1, parseInt(String(req.query.limit || "200"), 10) || 200));
+    const statusParam = req.query.status ? String(req.query.status) : (req.query.include_archived === "true" ? "archived" : "all");
     let branchId = (req.query.branch_id as string) || (req.query.branchId as string) || undefined;
 
     // Enforce branch boundary for branch managers and agents

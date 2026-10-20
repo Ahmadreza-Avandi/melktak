@@ -52,8 +52,9 @@ export async function authMiddleware(req: Request, res: Response, next: NextFunc
     bearerToken = req.headers.authorization.split(" ")[1];
   }
   let cookieToken = req.cookies?.amlak_token;
+  let queryToken = typeof req.query?.token === "string" ? req.query.token : undefined;
 
-  const token = bearerToken || cookieToken;
+  const token = bearerToken || cookieToken || queryToken;
   if (!token) {
     return res.status(401).json({
       success: false,

@@ -4,11 +4,16 @@ import crypto from "crypto";
 
 export class StorageService {
   private baseDir: string;
+  private mediaDir: string;
 
   constructor() {
     this.baseDir = path.resolve(process.cwd(), "data", "private_documents");
     if (!fs.existsSync(this.baseDir)) {
       fs.mkdirSync(this.baseDir, { recursive: true });
+    }
+    this.mediaDir = path.resolve(process.cwd(), "data", "uploads", "properties");
+    if (!fs.existsSync(this.mediaDir)) {
+      fs.mkdirSync(this.mediaDir, { recursive: true });
     }
   }
 
@@ -23,22 +28,54 @@ export class StorageService {
     const filePath = path.join(tenantDir, filename);
 
     await fs.promises.writeFile(filePath, buffer);
+    // Also save copy in root of privateDocsDir for flat basename lookup
+    try {
+      const flatPath = path.join(this.baseDir, filename);
+      await fs.promises.copyFile(filePath, flatPath);
+    } catch {}
     return path.join(tenantId, filename);
   }
 
-  getFilePath(storageKey: string, tenantId: string): string | null {
-    // Prevent path traversal
-    const safeKey = path.normalize(storageKey).replace(/^(\.\.[\/\\])+/, "");
-    const fullPath = path.join(this.baseDir, safeKey);
-    const tenantDir = path.join(this.baseDir, tenantId);
+  async savePropertyMedia(
+    tenantId: string,
+    propertyId: string,
+    originalName: string,
+    mimeType: string,
+    buffer: Buffer
+  ): Promise<{ url: string; fileName: string }> {
+    if (!fs.existsSync(this.mediaDir)) {
+      fs.mkdirSync(this.mediaDir, { recursive: true });
+    }
+    const rawExt = path.extname(originalName);
+    const ext = rawExt || (mimeType.includes("png") ? ".png" : mimeType.includes("webp") ? ".webp" : mimeType.includes("svg") ? ".svg" : ".jpg");
+    const randomHex = crypto.randomBytes(8).toString("hex");
+    const safeBase = originalName ? path.basename(originalName, rawExt).replace(/[^a-zA-Z0-9_\u0600-\u06FF-]/g, "_").slice(0, 30) : "media";
+    const filename = `prop_${tenantId.slice(0, 8)}_${propertyId.slice(0, 8)}_${Date.now()}_${randomHex}${ext}`;
+    const filePath = path.join(this.mediaDir, filename);
 
-    if (!fullPath.startsWith(tenantDir)) {
-      return null;
+    await fs.promises.writeFile(filePath, buffer);
+    return {
+      url: `/uploads/properties/${filename}`,
+      fileName: originalName || `${safeBase}${ext}`
+    };
+  }
+
+  getFilePath(storageKey: string, tenantId: string): string | null {
+    const safeKey = path.normalize(storageKey).replace(/^(\.\.[\/\\])+/, "");
+    const baseName = path.basename(safeKey);
+    const candidates = [
+      path.join(this.baseDir, safeKey),
+      path.join(this.baseDir, tenantId, baseName),
+      path.join(this.baseDir, baseName),
+      path.resolve(process.cwd(), "data", "uploads", safeKey),
+      path.resolve(process.cwd(), "data", "uploads", baseName)
+    ];
+    for (const c of candidates) {
+      if (fs.existsSync(c)) {
+        return c;
+      }
     }
-    if (!fs.existsSync(fullPath)) {
-      return null;
-    }
-    return fullPath;
+    return null;
   }
 
   async deleteFile(storageKey: string, tenantId: string): Promise<boolean> {
