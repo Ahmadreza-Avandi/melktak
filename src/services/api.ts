@@ -146,7 +146,7 @@ export const api = {
 
   updateProperty: (id: string, data: any) =>
     request<any>(`/properties/${id}`, {
-      method: "PUT",
+      method: "PATCH",
       body: JSON.stringify(data)
     }),
 
@@ -336,9 +336,12 @@ export const api = {
 
   updateTransaction: (id: string, data: any) =>
     request<any>(`/transactions/${id}`, {
-      method: "PUT",
+      method: "PATCH",
       body: JSON.stringify(data)
     }),
+
+  deleteTransaction: (id: string) =>
+    request(`/transactions/${id}`, { method: "DELETE" }),
 
   getPerformanceReport: (from?: string, to?: string, branch_id?: string) => {
     const query = new URLSearchParams();
